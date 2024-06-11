@@ -6,7 +6,7 @@
 	url = https://github.com/microsoft/Detours.git
 [submodule "deps/red4ext.sdk"]
 	path = deps/red4ext.sdk
-	url = https://github.com/jackhumbert/RED4ext.SDK.git
+	url = https://github.com/flibdev/RED4ext.SDK.git
 	branch = new-types
 [submodule "deps/cyberpunk_cmake"]
 	path = deps/cyberpunk_cmake

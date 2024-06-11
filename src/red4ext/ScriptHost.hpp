@@ -131,7 +131,7 @@ struct ScriptHost {
 
   // 1.6  RVA: 0x26BA70 / 2538096
   // 1.62 RVA: 0x26C0A0 / 2539680
-  /// @pattern 48 83 EC 28 65 48 8B 04 25 58 00 00 00 BA 10 00 00 00 48 8B 08 8B 04 0A 39 05 36 97 6A 03 7F 0C
+  /// @pattern 48 83 EC 28 65 48 8B 04 25 58 00 00 00 BA 10 00 00 00 48 8B 08 8B 04 0A 39 05 9E 41 E0 03 7F 0C
   static ScriptHost * Get() {
     RED4ext::RelocFunc<decltype(&ScriptHost::Get)> call(ScriptHost_Get_Addr);
     return call();
