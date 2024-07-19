@@ -545,7 +545,7 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 // 1.6  RVA: 0x2B93EF0 / 45694704
 // 1.61 RVA: 0x2B99290
 // 1.61hf RVA: 0x2B9BC70
-/// @pattern 4C 8B DC 49 89 5B 08 49 89 73 10 57 48 83 EC 20 48 8B 05 1D 9D 12 01 48 8B FA 40 8A F1 48 83 F8
+/// @pattern 4C 8B DC 49 89 5B 08 49 89 73 10 57 48 83 EC 20 48 8B 05 ? ? ? 01 48 8B FA 40 8A F1 48 83 F8
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 
 REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
@@ -649,7 +649,7 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 // 1.6  RVA: 0x2B90C60 / 45681760
 // 1.61 RVA: 0x2B96000
 // 1.61hf RVA: 0x2B989E0
-/// @pattern 4C 89 4C 24 20 53 55 56 57 41 54 41 56 48 83 EC 68 80 3D F0 C9 A4 00 00 49 8B F8 8B F2 48 8B E9
+/// @pattern 4C 89 4C 24 20 53 55 56 57 41 54 41 56 48 83 EC 68 80 3D ? ? ? 00 00 49 8B F8 8B F2 48 8B E9
 __int64 AssertionFailed(const char *, int, const char *, const char *...);
 
 REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {
