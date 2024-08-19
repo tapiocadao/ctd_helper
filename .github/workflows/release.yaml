@@ -1,5 +1,4 @@
 name: Release Workflow
-
 on: [ push, pull_request ]
 
 jobs:
