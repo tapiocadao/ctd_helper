@@ -439,9 +439,20 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
 extern void (__fastcall *CrashFunc_Original)(uint8_t, uintptr_t);
 
-    time_t     now = time(0);
-    struct tm  tstruct;
-    char       log_filename[80];
+std::string ConvertWStringToString(const std::wstring& wstr) {
+    if (wstr.empty()) {
+        return std::string();
+    }
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string str(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &str[0], size_needed, NULL, NULL);
+    return str;
+}
+
+void CrashFunc(uint8_t a1, uintptr_t a2) {
+    time_t now = time(0);
+    struct tm tstruct;
+    char log_filename[80];
     char niceTimestamp[80];
     tstruct = *localtime(&now);
     strftime(log_filename, sizeof(log_filename), "%Y-%m-%d_%H-%M-%S.html", &tstruct);
@@ -470,7 +481,7 @@ extern void (__fastcall *CrashFunc_Original)(uint8_t, uintptr_t);
 
     if (scriptLinkingError) {
         std::wstring werror(errorMessage);
-        std::string error(werror.begin(), werror.end());
+        std::string error = ConvertWStringToString(werror);
         htmlLog << fmt::format("<details><summary>Script Linking Error</summary>\n<div class='source'><pre><code>{}</code></pre></div></details>", error);
     }
 
