@@ -556,65 +556,64 @@ REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const cha
     return AssertionFailed_Original(file, lineNum, condition, message, args);
 }
 
-ModSettings::Variable* variable;
-
 RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason, const RED4ext::Sdk *aSdk) {
-    switch (aReason) {
-    case RED4ext::EMainReason::Load: {
-        pluginHandle = aHandle;
+  switch (aReason) {
+  case RED4ext::EMainReason::Load: {
+    pluginHandle = aHandle;
 
-        Utils::CreateLogger();
-        spdlog::info("Starting up CTD Helper");
+    Utils::CreateLogger();
+    spdlog::info("Starting up CTD Helper");
 
-        auto ptr = GetModuleHandle(nullptr);
-        spdlog::info("Base address: {}", fmt::ptr(ptr));
+    auto ptr = GetModuleHandle(nullptr);
+    spdlog::info("Base address: {}", fmt::ptr(ptr));
 
-        ModModuleFactory::GetInstance().Load(aSdk, aHandle);
+    ModModuleFactory::GetInstance().Load(aSdk, aHandle);
 
-        numberOfProcessors = std::thread::hardware_concurrency();
+    numberOfProcessors = std::thread::hardware_concurrency();
 
-        auto handle = GetModuleHandle(L"mod_settings");
-        if (!handle) {
-            SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
-            handle = LoadLibrary(L"mod_settings");
-        }
-        if (handle) {
-            typedef void (WINAPI * add_variable_t)(ModSettings::Variable* variable);
-            auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
 
-            variable = (ModSettings::Variable *)malloc(sizeof(ModSettings::Variable));
-            memset(variable, 0, sizeof(ModSettings::Variable));
-            variable->modName = "CTD Helper";
-            variable->className = "ctd_helper";
-            variable->propertyName = "enabled";
-            variable->type = "Bool";
-            variable->displayName = "Enable Script Function Logging";
-            variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
-            variable->defaultValue.b = ctd_helper_enabled;
-            variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
-            addVariable(variable);
-        }
-
-        break;
+    auto handle = GetModuleHandle(L"mod_settings");
+    if (!handle) {
+      SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
+      handle = LoadLibrary(L"mod_settings");
     }
-    case RED4ext::EMainReason::Unload: {
-        spdlog::info("Shutting down");
-        ModModuleFactory::GetInstance().Unload(aSdk, aHandle);
-        free(variable);
-        spdlog::shutdown();
-        break;
-    }
+    if (handle) {
+      typedef void (WINAPI * add_variable_t)(ModSettings::Variable* variable);
+      auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
+
+      variable = (ModSettings::Variable *)malloc(sizeof(ModSettings::Variable));
+      memset(variable, 0, sizeof(ModSettings::Variable));
+      variable->modName = "CTD Helper";
+      variable->className = "ctd_helper";
+      variable->propertyName = "enabled";
+      variable->type = "Bool";
+      variable->displayName = "Enable Script Function Logging";
+      variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
+      variable->defaultValue.b = ctd_helper_enabled;
+      variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
+      addVariable(variable);
     }
 
-    return true;
+    break;
+  }
+  case RED4ext::EMainReason::Unload: {
+    spdlog::info("Shutting down");
+    ModModuleFactory::GetInstance().Unload(aSdk, aHandle);
+    free(variable);
+    spdlog::shutdown();
+    break;
+  }
+  }
+
+  return true;
 }
 
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
-    aInfo->name = L"CTD Helper";
-    aInfo->author = L"Jack Humbert";
-    auto version = RED4ext::v0::CreateSemVer(1, 0, 0, RED4EXT_V0_SEMVER_PRERELEASE_TYPE_NONE, 0);
-    aInfo->runtime = RED4EXT_RUNTIME_LATEST;
-    aInfo->sdk = RED4EXT_SDK_LATEST;
+  aInfo->name = L"CTD Helper";
+  aInfo->author = L"Jack Humbert";
+  auto version = RED4ext::v0::CreateSemVer(1, 0, 0, RED4EXT_V0_SEMVER_PRERELEASE_TYPE_NONE, 0);
+  aInfo->runtime = RED4EXT_RUNTIME_LATEST;
+  aInfo->sdk = RED4EXT_SDK_LATEST;
 }
 
 RED4EXT_C_EXPORT uint32_t RED4EXT_CALL Supports() { return RED4EXT_API_VERSION_LATEST; }
