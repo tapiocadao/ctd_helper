@@ -433,6 +433,8 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
     }
 }
 
+REGISTER_HOOK(void, CrashFunc_Original, uint8_t a1, uintptr_t a2);
+
 __declspec(noinline) void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
     time_t now = time(0);
     struct tm tstruct;
