@@ -166,16 +166,26 @@ int numberOfProcessors = 4;
 
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func, bool isStatic) {
 
+// Convert std::wstring to std::string using WideCharToMultiByte
+std::string ConvertWStringToString(const std::wstring& wstr) {
+    if (wstr.empty()) {
+        return std::string();
+    }
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string str(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &str[0], size_needed, NULL, NULL);
+    return str;
+}
+
+void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func, bool isStatic) {
+
 wchar_t* thread_name;
 HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
 
 if (SUCCEEDED(hr) && thread_name != nullptr)
 {
     std::wstring ws(thread_name);
-
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    std::string thread = converter.to_bytes(ws);
-
+    std::string thread = ConvertWStringToString(ws);
     LocalFree(thread_name);
 }
 
@@ -183,6 +193,46 @@ if (SUCCEEDED(hr) && thread_name != nullptr)
     RED4ext::CNamePool::Add(thread.c_str());
     auto profiler = CyberpunkMod::Profiler(thread.c_str(), 5);
   #endif
+
+  if (!bundle_loaded) {
+    auto bundlePath = Utils::GetRootDir() / "r6" / "cache" / "final.redscripts";
+    auto bundleLocation =  bundlePath.string();
+    spdlog::info("Loading scripts blob: {}", bundleLocation.c_str());
+    bundle = bundle_load(bundleLocation.c_str());
+    bundle_loaded = true;
+  }
+
+  auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
+  auto call = CallPair();
+  call.isStatic = isStatic;
+  call.line = invoke->lineNumber;
+  call.self.func = *reinterpret_cast<BaseFunction*>(func);
+  call.self.type = func->GetParent();
+  if (stackFrame->func) {
+    call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
+    call.parent.type = stackFrame->func->GetParent();
+  }
+  if (context && context->ref.instance == context) {
+    call.self.contextType = call.parent.contextType = context->GetType();
+  };
+
+  {
+    std::lock_guard<std::mutex> lock(queueLock);
+    lastThread = thread;
+  }
+  auto& queue = funcCallQueues[thread];
+  queue.emplace(call);
+  while (queue.size() > MAX_CALLS) {
+    queue.pop();
+  }
+
+  #ifdef CTD_HELPER_PROFILING
+    auto avg = profiler.End();
+    if (avg != 0) {
+      spdlog::info("1s of execution in {:<15}: {:7}us", profiler.m_tracker.ToString(), avg);
+    }
+  #endif
+}
 
   if (!bundle_loaded) {
     auto bundlePath = Utils::GetRootDir() / "r6" / "cache" / "final.redscripts";
