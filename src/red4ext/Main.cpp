@@ -437,7 +437,7 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 }
 
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
-extern void (__fastcall *CrashFunc_Original)(uint8_t, uintptr_t);
+extern void (__fastcall *CrashFunc_Original)(uint8_t, uintptr_t); // Move this outside any function and declare it once at global scope
 
 std::string ConvertWStringToString(const std::wstring& wstr) {
     if (wstr.empty()) {
@@ -449,7 +449,7 @@ std::string ConvertWStringToString(const std::wstring& wstr) {
     return str;
 }
 
-void CrashFunc(uint8_t a1, uintptr_t a2) {
+void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no duplicate definition of this function
     time_t now = time(0);
     struct tm tstruct;
     char log_filename[80];
