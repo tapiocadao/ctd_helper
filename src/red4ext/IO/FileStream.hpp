@@ -1,22 +1,6 @@
 #pragma once
 
-#include <Windows.h>
-#include <cstdint>
-#include <filesystem>
-
-class BaseStream
-{
-public:
-    explicit BaseStream(int a) {}
-    virtual ~BaseStream() = default;
-    virtual void* ReadWrite(void* aBuffer, uint32_t aLength) = 0;
-    virtual size_t GetPointerPosition() = 0;
-    virtual size_t GetLength() = 0;
-    virtual bool Seek(size_t aDistance) = 0;
-    virtual bool Flush() = 0;
-};
-
-class FileStream : public BaseStream
+class FileStream : public RED4ext::BaseStream
 {
 public:
     FileStream(const std::filesystem::path& aPath, uint32_t aDesiredAccess, uint32_t aShareMode,
