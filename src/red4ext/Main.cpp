@@ -28,8 +28,24 @@
 
 #define MAX_CALLS 10
 
+// Global Declarations
 RED4ext::PluginHandle pluginHandle;
 bool ctd_helper_enabled = true;
+std::wstring currentLogFile;
+std::mutex queueLock;
+std::map<std::string, std::queue<CallPair>> funcCallQueues;
+std::string lastThread;
+ScriptBundle* bundle;
+bool bundle_loaded = false;
+bool scriptLinkingError = false;
+extern void(__fastcall* CrashFunc_Original)(uint8_t, uintptr_t);
+wchar_t errorMessage[1000] = L"There was an error validating redscript types with their native counterparts. Reference the mod that uses the "
+                              L"type(s) in the game's message below:\n";
+const wchar_t* errorMessageEnd = L"\nYou can press Ctrl+C to copy this message, but it has also been written to the "
+                                 L"log at red4ext/logs/ctd_helper.log";
+const wchar_t* errorCaption = L"Script Type Validation Error";
+
+int numberOfProcessors = 4;
 
 void ctd_helper_callback(RED4ext::CName categoryName, RED4ext::CName propertyName, ModSettings::ModVariableType value) {
     if (propertyName == "enabled") {
@@ -60,15 +76,15 @@ struct FuncCall {
     uint32_t line;
     CallType callType = CallType::Unknown;
 
-    RED4ext::CBaseFunction * get_func() {
+    RED4ext::CBaseFunction* get_func() {
         return reinterpret_cast<RED4ext::CBaseFunction*>(&this->func);
     }
 
     std::string GetFuncName() {
         std::string fullName(this->get_func()->fullName.ToString());
-        if (fullName.find(";") != -1) {
+        if (fullName.find(";") != std::string::npos) {
             fullName.replace(fullName.find(";"), 1, "#");
-            if (fullName.find(";") != -1) {
+            if (fullName.find(";") != std::string::npos) {
                 fullName.replace(fullName.find(";"), 1, ") -> ");
                 fullName.replace(fullName.find("#"), 1, "(");
             } else {
@@ -91,21 +107,6 @@ struct CallPair {
     uint16_t line;
 };
 
-std::mutex queueLock;
-std::map<std::string, std::queue<CallPair>> funcCallQueues;
-std::string lastThread;
-ScriptBundle * bundle;
-bool bundle_loaded = false;
-
-bool scriptLinkingError = false;
-
-wchar_t errorMessage[1000] =
-    L"There was an error validating redscript types with their native counterparts. Reference the mod that uses the "
-    L"type(s) in the game's message below:\n";
-const wchar_t *errorMessageEnd = L"\nYou can press Ctrl+C to copy this message, but it has also been written to the "
-                                 L"log at red4ext/logs/ctd_helper.log";
-const wchar_t *errorCaption = L"Script Type Validation Error";
-
 // Convert std::wstring to std::string using WideCharToMultiByte
 std::string ConvertWStringToString(const std::wstring& wstr) {
     if (wstr.empty()) {
@@ -117,7 +118,7 @@ std::string ConvertWStringToString(const std::wstring& wstr) {
     return str;
 }
 
-uintptr_t __fastcall ShowMessageBox(char, char);
+uintptr_t __fastcall ShowMessageBox(char a1, char a2);
 
 REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
     if (scriptLinkingError) {
@@ -129,17 +130,15 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
     }
 }
 
-void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
+void __fastcall Breakpoint(RED4ext::IScriptable* context, RED4ext::CStackFrame* stackFrame, uintptr_t a3, uintptr_t a4);
 
-REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable* context, RED4ext::CStackFrame* stackFrame, uintptr_t a3, uintptr_t a4) {
     spdlog::info("Redscript breakpoint encountered");
     __debugbreak();
     Breakpoint_Original(context, stackFrame, a3, a4);
 }
 
-int numberOfProcessors = 4;
-
-void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func, bool isStatic) {
+void LogFunctionCall(RED4ext::IScriptable* context, RED4ext::CStackFrame* stackFrame, RED4ext::CBaseFunction* func, bool isStatic) {
 
     wchar_t* thread_name;
     HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
@@ -151,10 +150,10 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
         LocalFree(thread_name);
     }
 
-    #ifdef CTD_HELPER_PROFILING
-        RED4ext::CNamePool::Add(thread.c_str());
-        auto profiler = CyberpunkMod::Profiler(thread.c_str(), 5);
-    #endif
+#ifdef CTD_HELPER_PROFILING
+    RED4ext::CNamePool::Add(thread.c_str());
+    auto profiler = CyberpunkMod::Profiler(thread.c_str(), 5);
+#endif
 
     if (!bundle_loaded) {
         auto bundlePath = Utils::GetRootDir() / "r6" / "cache" / "final.redscripts";
@@ -164,7 +163,7 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
         bundle_loaded = true;
     }
 
-    auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
+    auto invoke = reinterpret_cast<RED4ext::Instr::Invoke*>(stackFrame->code);
     auto call = CallPair();
     call.isStatic = isStatic;
     call.line = invoke->lineNumber;
@@ -188,19 +187,19 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
         queue.pop();
     }
 
-    #ifdef CTD_HELPER_PROFILING
-        auto avg = profiler.End();
-        if (avg != 0) {
-            spdlog::info("1s of execution in {:<15}: {:7}us", profiler.m_tracker.ToString(), avg);
-        }
-    #endif
+#ifdef CTD_HELPER_PROFILING
+    auto avg = profiler.End();
+    if (avg != 0) {
+        spdlog::info("1s of execution in {:<15}: {:7}us", profiler.m_tracker.ToString(), avg);
+    }
+#endif
 }
 
-void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
+void __fastcall InvokeStatic(RED4ext::IScriptable*, RED4ext::CStackFrame* stackFrame, uintptr_t, uintptr_t);
 
-REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable* context, RED4ext::CStackFrame* stackFrame, uintptr_t a3, uintptr_t a4) {
     if (ctd_helper_enabled) {
-        auto invokeStatic = reinterpret_cast<RED4ext::Instr::InvokeStatic *>(stackFrame->code);
+        auto invokeStatic = reinterpret_cast<RED4ext::Instr::InvokeStatic*>(stackFrame->code);
 
         if (invokeStatic->func) {
             LogFunctionCall(context, stackFrame, invokeStatic->func, true);
@@ -210,11 +209,11 @@ REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4
     InvokeStatic_Original(context, stackFrame, a3, a4);
 }
 
-void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
+void __fastcall InvokeVirtual(RED4ext::IScriptable*, RED4ext::CStackFrame* stackFrame, uintptr_t a3, uintptr_t a4);
 
-REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable* context, RED4ext::CStackFrame* stackFrame, uintptr_t a3, uintptr_t a4) {
     if (ctd_helper_enabled) {
-        auto invokeVirtual = reinterpret_cast<RED4ext::Instr::InvokeVirtual *>(stackFrame->code);
+        auto invokeVirtual = reinterpret_cast<RED4ext::Instr::InvokeVirtual*>(stackFrame->code);
         auto cls = context->nativeType;
         if (!cls)
             cls = context->GetNativeType();
@@ -235,12 +234,12 @@ void encode_html(std::string& data) {
     buffer.reserve(data.size());
     for (size_t pos = 0; pos != data.size(); ++pos) {
         switch (data[pos]) {
-            case '&':  buffer.append("&amp;");       break;
-            case '\"': buffer.append("&quot;");      break;
-            case '\'': buffer.append("&apos;");      break;
-            case '<':  buffer.append("&lt;");        break;
-            case '>':  buffer.append("&gt;");        break;
-            default:   buffer.append(&data[pos], 1); break;
+        case '&':  buffer.append("&amp;");       break;
+        case '\"': buffer.append("&quot;");      break;
+        case '\'': buffer.append("&apos;");      break;
+        case '<':  buffer.append("&lt;");        break;
+        case '>':  buffer.append("&gt;");        break;
+        default:   buffer.append(&data[pos], 1); break;
         }
     }
     data.swap(buffer);
@@ -253,7 +252,7 @@ void PrintCall(std::ofstream& htmlLog, FuncCall& call);
 
 void print_redscript_source(std::ofstream& htmlLog, FuncCall& call) {
     if (!call.get_func()->flags.isNative) {
-        Decompilation * decomp = nullptr;
+        Decompilation* decomp = nullptr;
         auto funcName = call.get_func()->fullName.ToString();
         if (call.type) {
             decomp = decompile_method(bundle, call.type->GetName().ToString(), funcName);
@@ -288,8 +287,8 @@ void print_redscript_source(std::ofstream& htmlLog, FuncCall& call) {
                 if (lineIndex != 0) {
                     bool found = false;
                     bool last = call.children.size() && *lineNumbers == call.children[call.children.size() - 1].line;
-                    FuncCall * foundChild = nullptr;
-                    for (auto &child : call.children) {
+                    FuncCall* foundChild = nullptr;
+                    for (auto& child : call.children) {
                         if (*lineNumbers == child.line) {
                             found = true;
                             foundChild = &child;
@@ -362,7 +361,7 @@ void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, 
                 }
                 htmlLog << fmt::format("</code></pre>") << std::endl;
             } else {
-                spdlog::warn("Line number exceded file: {}:{}", path.string().c_str(), line_idx + 1);
+                spdlog::warn("Line number exceeded file: {}:{}", path.string().c_str(), line_idx + 1);
             }
         } else {
             htmlLog << fmt::format("<p><a href='{}'>{}:{}</a></p>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
@@ -372,10 +371,10 @@ void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, 
     }
 }
 
-FuncCall * FindFunc(std::vector<FuncCall>& map, RED4ext::CName key) {
-    if (auto it = find_if(map.begin(), map.end(), [&key](FuncCall& obj) {
+FuncCall* FindFunc(std::vector<FuncCall>& map, RED4ext::CName key) {
+    if (auto it = std::find_if(map.begin(), map.end(), [&key](FuncCall& obj) {
         return obj.get_func()->fullName == key;
-    }); it != map.end()) {
+        }); it != map.end()) {
         return it._Ptr;
     } else {
         for (auto& value : map) {
@@ -425,8 +424,6 @@ void PrintCall(std::ofstream& htmlLog, FuncCall& call) {
     htmlLog << "</div>" << std::endl;
 }
 
-std::wstring currentLogFile;
-
 void print_log(std::ofstream& stream, std::string name, std::filesystem::path path) {
     if (std::filesystem::exists(path)) {
         std::ifstream log_file(path);
@@ -437,19 +434,6 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 }
 
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
-extern void (__fastcall *CrashFunc_Original)(uint8_t, uintptr_t); // Move this outside any function and declare it once at global scope
-
-std::string ConvertWStringToString(const std::wstring& wstr) {
-    if (wstr.empty()) {
-        return std::string();
-    }
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    std::string str(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &str[0], size_needed, NULL, NULL);
-    return str;
-}
-
-void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no duplicate definition of this function
     time_t now = time(0);
     struct tm tstruct;
     char log_filename[80];
@@ -487,7 +471,7 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no dup
 
     std::map<std::string, std::vector<FuncCall>> orgd;
 
-    for (auto &queue : funcCallQueues) {
+    for (auto& queue : funcCallQueues) {
         auto thread = queue.first;
         for (auto i = 0; queue.second.size(); i++) {
             auto call = queue.second.front();
@@ -512,11 +496,11 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no dup
         }
     }
 
-    for (auto &queue : orgd) {
+    for (auto& queue : orgd) {
         auto level = 0;
         std::queue<uint64_t> stack;
         auto crashing = lastThread == queue.first;
-        htmlLog << fmt::format("<div class='thread'><h2>{0}{1}</h2>", queue.first, crashing ? " LAST EXECUTED":"") << std::endl;
+        htmlLog << fmt::format("<div class='thread'><h2>{0}{1}</h2>", queue.first, crashing ? " LAST EXECUTED" : "") << std::endl;
         uint64_t last = 0;
         for (auto& call : queue.second) {
             PrintCall(htmlLog, call);
@@ -528,7 +512,7 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no dup
 </html>)";
     htmlLog.close();
 
-    ShellExecute(0, 0, currentLogFile.c_str(), 0, 0 , SW_SHOW );
+    ShellExecute(0, 0, currentLogFile.c_str(), 0, 0, SW_SHOW);
 
     bundle_free(bundle);
 
@@ -539,9 +523,7 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {  // Ensure there is no dup
     CrashFunc_Original(a1, a2);
 }
 
-__int64 AssertionFailed(const char *, int, const char *, const char *...);
-
-REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {
+__int64 AssertionFailed(const char* file, int lineNum, const char* condition, const char* message...) {
     va_list args;
     va_start(args, message);
     spdlog::error("File: {} @ Line {}", file, lineNum);
@@ -550,70 +532,69 @@ REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const cha
     }
     if (message) {
         char buffer[0x400];
-        sprintf(buffer, message, args);
+        vsprintf(buffer, message, args);
         spdlog::error("Message: {}", buffer);
     }
-    return AssertionFailed_Original(file, lineNum, condition, message, args);
+    va_end(args);
+    return AssertionFailed_Original(file, lineNum, condition, message);
 }
 
-RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason, const RED4ext::Sdk *aSdk) {
-  switch (aReason) {
-  case RED4ext::EMainReason::Load: {
-    pluginHandle = aHandle;
+RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason, const RED4ext::Sdk* aSdk) {
+    switch (aReason) {
+    case RED4ext::EMainReason::Load: {
+        pluginHandle = aHandle;
 
-    Utils::CreateLogger();
-    spdlog::info("Starting up CTD Helper");
+        Utils::CreateLogger();
+        spdlog::info("Starting up CTD Helper");
 
-    auto ptr = GetModuleHandle(nullptr);
-    spdlog::info("Base address: {}", fmt::ptr(ptr));
+        auto ptr = GetModuleHandle(nullptr);
+        spdlog::info("Base address: {}", fmt::ptr(ptr));
 
-    ModModuleFactory::GetInstance().Load(aSdk, aHandle);
+        ModModuleFactory::GetInstance().Load(aSdk, aHandle);
 
-    numberOfProcessors = std::thread::hardware_concurrency();
+        numberOfProcessors = std::thread::hardware_concurrency();
 
+        auto handle = GetModuleHandle(L"mod_settings");
+        if (!handle) {
+            SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
+            handle = LoadLibrary(L"mod_settings");
+        }
+        if (handle) {
+            typedef void(WINAPI* add_variable_t)(ModSettings::Variable* variable);
+            auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
 
-    auto handle = GetModuleHandle(L"mod_settings");
-    if (!handle) {
-      SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
-      handle = LoadLibrary(L"mod_settings");
+            ModSettings::Variable* variable = (ModSettings::Variable*)malloc(sizeof(ModSettings::Variable));
+            memset(variable, 0, sizeof(ModSettings::Variable));
+            variable->modName = "CTD Helper";
+            variable->className = "ctd_helper";
+            variable->propertyName = "enabled";
+            variable->type = "Bool";
+            variable->displayName = "Enable Script Function Logging";
+            variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
+            variable->defaultValue.b = ctd_helper_enabled;
+            variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
+            addVariable(variable);
+        }
+
+        break;
     }
-    if (handle) {
-      typedef void (WINAPI * add_variable_t)(ModSettings::Variable* variable);
-      auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
-
-      variable = (ModSettings::Variable *)malloc(sizeof(ModSettings::Variable));
-      memset(variable, 0, sizeof(ModSettings::Variable));
-      variable->modName = "CTD Helper";
-      variable->className = "ctd_helper";
-      variable->propertyName = "enabled";
-      variable->type = "Bool";
-      variable->displayName = "Enable Script Function Logging";
-      variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
-      variable->defaultValue.b = ctd_helper_enabled;
-      variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
-      addVariable(variable);
+    case RED4ext::EMainReason::Unload: {
+        spdlog::info("Shutting down");
+        ModModuleFactory::GetInstance().Unload(aSdk, aHandle);
+        spdlog::shutdown();
+        break;
+    }
     }
 
-    break;
-  }
-  case RED4ext::EMainReason::Unload: {
-    spdlog::info("Shutting down");
-    ModModuleFactory::GetInstance().Unload(aSdk, aHandle);
-    free(variable);
-    spdlog::shutdown();
-    break;
-  }
-  }
-
-  return true;
+    return true;
 }
 
-RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
-  aInfo->name = L"CTD Helper";
-  aInfo->author = L"Jack Humbert";
-  auto version = RED4ext::v0::CreateSemVer(1, 0, 0, RED4EXT_V0_SEMVER_PRERELEASE_TYPE_NONE, 0);
-  aInfo->runtime = RED4EXT_RUNTIME_LATEST;
-  aInfo->sdk = RED4EXT_SDK_LATEST;
+RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo* aInfo) {
+    aInfo->name = L"CTD Helper";
+    aInfo->author = L"Jack Humbert";
+    auto version = RED4ext::v0::CreateSemVer(1, 0, 0, RED4EXT_V0_SEMVER_PRERELEASE_TYPE_NONE, 0);
+    aInfo->runtime = RED4EXT_RUNTIME_LATEST;
+    aInfo->sdk = RED4EXT_SDK_LATEST;
 }
 
 RED4EXT_C_EXPORT uint32_t RED4EXT_CALL Supports() { return RED4EXT_API_VERSION_LATEST; }
