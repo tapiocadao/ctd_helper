@@ -162,10 +162,23 @@ int numberOfProcessors = 4;
 
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func, bool isStatic) {
 
-  wchar_t * thread_name;
-  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
-  std::wstring ws(thread_name);
-  auto thread = std::string(ws.begin(), ws.end());
+#include <string>
+#include <locale>
+#include <codecvt>
+#include <windows.h>
+
+wchar_t* thread_name;
+HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+
+if (SUCCEEDED(hr) && thread_name != nullptr)
+{
+    std::wstring ws(thread_name);
+
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::string thread = converter.to_bytes(ws);
+
+    LocalFree(thread_name);
+}
 
   #ifdef CTD_HELPER_PROFILING
     RED4ext::CNamePool::Add(thread.c_str());
