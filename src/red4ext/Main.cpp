@@ -24,18 +24,6 @@
 #include <CyberpunkMod.hpp>
 #include <redscript.h>
 
-#define VER_FILEVERSION 1,0,0,0
-#define VER_PRODUCTVERSION 1,0,0,0
-#define VER_FILEVERSION_STR "1.0.0.0"
-#define VER_PRODUCTVERSION_STR "1.0.0.0"
-#define VER_COMPANYNAME_STR "My Company"
-#define VER_FILEDESCRIPTION_STR "My Application"
-#define VER_INTERNALNAME_STR "MyAppInternal"
-#define VER_LEGALCOPYRIGHT_STR "Copyright © 2024 My Company"
-#define VER_PRODUCTNAME_STR "My Application"
-#define VER_ORIGINALFILENAME_STR "MyApp.exe"
-#define VER_COMMENTS_STR "Some comments about the app"
-
 #define MAX_CALLS 10
 
 // HWND hWnd;
