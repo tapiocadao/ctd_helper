@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
+set(CMAKE_DISABLE_PRECOMPILE_HEADERS TRUE)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/cyberpunk_cmake")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/red4ext.sdk/cmake")
@@ -10,8 +12,8 @@ configure_mod(
   NAME "CTD Helper"
   SLUG ${PROJECT_NAME}
   PREFIX CTD_HELPER
-  AUTHOR "Jack Humbert"
-  URL "https://github.com/jackhumbert/ctd_helper"
+  AUTHOR "Matty Salads"
+  URL "https://github.com/tapiocadao/ctd_helper"
   LICENSE "Licensed under the MIT license. See the license.md in the root project for details."
 )
 
