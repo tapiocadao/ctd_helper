@@ -23,6 +23,10 @@
 #include "Instr.hpp"
 #include <CyberpunkMod.hpp>
 #include <redscript.h>
+#include <string>
+#include <locale>
+#include <codecvt>
+#include <windows.h>
 
 #define MAX_CALLS 10
 
@@ -161,11 +165,6 @@ int numberOfProcessors = 4;
 // and figure out exactly where code execution stopped/crashed
 
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func, bool isStatic) {
-
-#include <string>
-#include <locale>
-#include <codecvt>
-#include <windows.h>
 
 wchar_t* thread_name;
 HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
