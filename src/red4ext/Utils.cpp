@@ -1,15 +1,17 @@
-// #include "stdafx.hpp"
 #include "Utils.hpp"
 
+#include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <filesystem>
+#include <windows.h>
 
 void Utils::CreateLogger()
 {
     auto rootDir = GetRootDir();
     auto red4extDir = rootDir / L"red4ext";
     auto logsDir = red4extDir / L"logs";
-  spdlog::filename_t logFile = (logsDir / L"ctd_helper.log");
+    spdlog::filename_t logFile = (logsDir / L"ctd_helper.log").string();
 
     auto console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     auto file = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
@@ -36,7 +38,7 @@ std::filesystem::path Utils::GetRootDir()
         auto length = GetModuleFileName(nullptr, filename.data(), static_cast<uint32_t>(filename.size()));
         if (length > 0)
         {
-            // Resize it to the real, std::filesystem::path" will use the string's length instead of recounting it.
+            // Resize it to the real length; std::filesystem::path will use the string's length instead of recounting it.
             filename.resize(length);
         }
     } while (GetLastError() == ERROR_INSUFFICIENT_BUFFER);
@@ -53,7 +55,7 @@ std::wstring Utils::ToWString(const char* aText)
 {
     auto length = strlen(aText);
 
-    std::wstring result(L"", length);
+    std::wstring result(length, L'\0');
     mbstowcs(result.data(), aText, length);
 
     return result;
