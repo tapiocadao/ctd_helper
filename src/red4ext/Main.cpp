@@ -727,14 +727,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 }
 
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
-  #ifdef RED4EXT_STATIC_LIB
-auto version = RED4ext::v0::CreateSemVer(major, minor, patch);
-#else
-// Handle the case where RED4EXT_STATIC_LIB is not defined
-#endif
   aInfo->name = L"CTD Helper";
   aInfo->author = L"Jack Humbert";
-  aInfo->version = RED4EXT_SEMVER;
+  aInfo->version = RED4EXT_SEMVER(MOD_VERSION_MAJOR, MOD_VERSION_MINOR, MOD_VERSION_PATCH);
   aInfo->runtime = RED4EXT_RUNTIME_LATEST;
   aInfo->sdk = RED4EXT_SDK_LATEST;
 }
