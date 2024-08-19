@@ -7,7 +7,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/red4ext.sdk/cmak
 include(ConfigureVersionFromGit)
 configure_version_from_git()
 
-project(ctd_helper VERSION ${GIT_VERSION_MAJOR}.${GIT_VERSION_MINOR}.${GIT_VERSION_PATCH})
+project(ctd_helper VERSION)
 
 include(CyberpunkMod)
 
